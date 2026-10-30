@@ -61,7 +61,13 @@
     var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/.test(ua);
     var isWebView = /; wv\)|FBAN|FBAV|Instagram|WhatsApp/.test(ua);
 
-    if (isIOS || isSafari || isWebView) {
+    // Embedding also fails (401) in Chrome/Edge when third-party cookies are
+    // blocked or several Google accounts are signed in, and a page can't detect
+    // that. So open the portal directly everywhere. Set EMBED = true to try the
+    // banner-free embedded view again.
+    var EMBED = false;
+
+    if (!EMBED || isIOS || isSafari || isWebView) {
       location.replace(PORTAL_URL);
     } else {
       frame.addEventListener('load', function () { loading.classList.add('gone'); });
