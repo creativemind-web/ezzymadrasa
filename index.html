@@ -51,8 +51,22 @@
     var frame = document.getElementById('app');
     var loading = document.getElementById('loading');
     document.getElementById('fallback').href = PORTAL_URL;
-    frame.addEventListener('load', function () { loading.classList.add('gone'); });
-    frame.src = PORTAL_URL;
+
+    // Safari (all iPhone/iPad browsers, including WhatsApp's) and Android
+    // in-app WebViews block the cookies Google needs inside an embedded frame,
+    // which shows "401. That's an error." On those, open the portal directly.
+    var ua = navigator.userAgent;
+    var isIOS = /iPhone|iPad|iPod/.test(ua) ||
+      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/.test(ua);
+    var isWebView = /; wv\)|FBAN|FBAV|Instagram|WhatsApp/.test(ua);
+
+    if (isIOS || isSafari || isWebView) {
+      location.replace(PORTAL_URL);
+    } else {
+      frame.addEventListener('load', function () { loading.classList.add('gone'); });
+      frame.src = PORTAL_URL;
+    }
   </script>
 </body>
 </html>
