@@ -1,78 +1,851 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ezzy Madrasa · Fee Status &amp; Hall Ticket Portal</title>
+  <title>Ezzy Madrasa - Fee Status &amp; Hall Ticket</title>
   <meta name="description" content="Ezzy Madrasa, Burhani Park, Neral. Check fee status and download your hall ticket.">
   <meta name="theme-color" content="#0d7a6f">
   <link rel="icon" href="https://drive.google.com/thumbnail?id=11TTDvVd_Co3ISHFmaCRpfhdyJniYSOFF&sz=w128">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
   <style>
-    html, body { margin: 0; height: 100%; background: #f3f4f6; }
-    /* The Apps Script app fills the whole window. Embedding it in this page
-       is what hides Google's "created by a Google Apps Script user" banner. */
-    #app {
-      position: fixed; inset: 0;
-      width: 100%; height: 100%;
-      border: 0; display: block;
+    :root {
+      --green: #0f766e; --green-light: #ccfbf1;
+      --red: #b91c1c;   --red-light: #fee2e2;
+      --amber: #b45309; --amber-light: #fef3c7;
+      --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb; --bg: #f3f4f6;
     }
-    #loading {
-      position: fixed; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 14px; font-family: "Segoe UI", Roboto, Arial, sans-serif; color: #0d7a6f;
-      background: #f3f4f6; transition: opacity .3s;
-    }
-    #loading img { width: 96px; height: 96px; object-fit: contain; }
-    #loading .spin {
-      width: 34px; height: 34px; border-radius: 50%;
-      border: 4px solid #cfe7e3; border-top-color: #0d7a6f;
-      animation: spin 0.9s linear infinite;
-    }
-    #loading a { color: #0d7a6f; font-size: .9rem; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    header { background: var(--green); color: #fff; padding: 18px 16px; text-align: center; }
+    header h1 { margin: 0; font-size: 20px; }
+    header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+    main { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
+    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    input, select { width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 14px; background: #fff; color: var(--ink); }
+    input:focus, select:focus { outline: 2px solid var(--green); border-color: var(--green); }
+    input[type="checkbox"] { width: 20px; height: 20px; margin: 0 8px 0 0; padding: 0; flex: 0 0 auto; }
+    button { width: 100%; padding: 12px; font-size: 16px; font-weight: 600; border: 0; border-radius: 6px; cursor: pointer; color: #fff; background: var(--green); }
+    button.secondary { background: #fff; color: var(--green); border: 1px solid var(--green); }
+    button.small { width: auto; padding: 6px 12px; font-size: 14px; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    button:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+    .toggle { display: flex; border: 1px solid var(--green); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
+    .toggle button { flex: 1; border-radius: 0; background: #fff; color: var(--green); }
+    .toggle button[aria-pressed="true"] { background: var(--green); color: #fff; }
+    #sessionBar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 14px; }
+    .search-row { display: flex; gap: 8px; }
+    .search-row input { flex: 1; }
+    .search-row button { width: auto; margin-bottom: 14px; }
+    .table-wrap { overflow-x: auto; }
+    .check { display: flex; align-items: center; margin: 14px 0; }
+    .check label { margin: 0; }
+    .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 12px; }
+    .yes { color: var(--green); font-weight: 600; }
+    .no { color: var(--red); font-weight: 600; }
+    #adminTools { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 4px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row > button { flex: 1; min-width: 150px; }
+    .access-set { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 4px; margin: 0 0 14px; }
+    .access-set legend { font-size: 14px; font-weight: 600; padding: 0 4px; }
+    .access-set .row > button { min-width: 90px; padding: 10px 12px; }
+    .access-set button[aria-pressed="true"] { background: var(--green); color: #fff; }
+    .access-set p { margin: 8px 0; }
+    .alert { padding: 12px 14px; border-radius: 6px; font-size: 14px; margin-bottom: 14px; }
+    .alert.error { background: var(--red-light); color: var(--red); }
+    .alert.ok { background: var(--green-light); color: var(--green); }
+    .alert.warn { background: var(--amber-light); color: var(--amber); }
+    .hidden { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
+    .stat { background: var(--bg); border-radius: 8px; padding: 12px; }
+    .stat .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .stat .v { font-size: 20px; font-weight: 700; margin-top: 4px; }
+    .bar { height: 16px; background: var(--line); border-radius: 8px; overflow: hidden; position: relative; margin: 8px 0 4px; }
+    .bar > div { height: 100%; background: var(--green); transition: width .4s; }
+    .bar .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--red); }
+    .bar-label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+    th { background: var(--bg); font-size: 12px; text-transform: uppercase; color: var(--muted); }
+    td.num, th.num { text-align: right; }
+    .student-line { font-size: 15px; margin: 0 0 4px; }
+    .student-line b { font-size: 18px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 6px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .gone { opacity: 0; pointer-events: none; }
+
+    /* ---- Start-up (loading branding from the server) ---- */
+    #boot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 48px 16px; color: var(--green); text-align: center; }
+    #boot img { width: 96px; height: 96px; object-fit: contain; }
+    #boot p { margin: 0; font-size: 15px; }
+    .spin-lg { width: 34px; height: 34px; border-radius: 50%; border: 4px solid var(--green-light); border-top-color: var(--green); animation: spin .9s linear infinite; }
+    #bootError h3 { margin-top: 0; color: var(--red); }
+    #bootError a { color: var(--green); }
+
+    /* ---- Hall ticket card (landscape, ID-card style) ---- */
+    .ticket { font-family: "Bodoni Moda", "Bodoni MT", "Didot", Georgia, "Times New Roman", serif; color: #000; }
+    .card-id { border: 1.5px solid #555; border-radius: 6px; background: #fff; width: 100%; max-width: 680px; margin: 0 auto; aspect-ratio: 2 / 1; display: flex; flex-direction: column; overflow: hidden; }
+    .card-head { display: flex; align-items: center; border-bottom: 1.5px solid #555; padding: 10px 14px; min-height: 22%; }
+    .card-logo { width: 72px; height: 72px; flex: 0 0 72px; display: flex; align-items: center; justify-content: center; }
+    .card-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .card-title { flex: 1; text-align: center; font-style: italic; font-weight: 500; line-height: 1.2; padding-left: 72px; }
+    .card-title .inst { font-size: 26px; }
+    .card-title .addr { font-size: 24px; }
+    .card-body { flex: 1; display: flex; padding: 14px 20px 10px 26px; gap: 12px; }
+    .card-fields { flex: 1; display: flex; flex-direction: column; justify-content: space-between; font-size: 22px; line-height: 1.25; }
+    .card-fields .f { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+    .card-fields .f .lbl { flex: 0 0 auto; }
+    .card-fields .f .val { font-family: "Segoe UI", Arial, sans-serif; font-size: 17px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+    .card-fields .bottom { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+    .card-photo { width: 120px; height: 140px; flex: 0 0 120px; border: 1px solid #555; align-self: flex-start; margin-top: 2px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .card-photo .ph { font-family: "Segoe UI", Arial, sans-serif; font-size: 10px; color: #999; text-align: center; }
+    .card-foot { font-family: "Segoe UI", Arial, sans-serif; font-size: 10px; color: #777; display: flex; justify-content: space-between; padding: 0 14px 6px; }
+
+    /* Timetable below the card (optional) */
+    .sched-wrap { max-width: 680px; margin: 16px auto 0; font-family: "Segoe UI", Arial, sans-serif; }
+    .sched-wrap h4 { margin: 0 0 6px; font-size: 14px; }
+    .sched th, .sched td { border: 1px solid #555; }
+    .sched th { background: #f1f5f9; color: var(--ink); }
+    .instr { margin-top: 10px; font-size: 12px; color: var(--ink); }
+    .instr b { display: block; margin-bottom: 2px; }
+
+    @media (max-width: 560px) {
+      .card-id { aspect-ratio: auto; }
+      .card-title .inst { font-size: 20px; }
+      .card-title .addr { font-size: 17px; }
+      .card-title { padding-left: 0; }
+      .card-logo { width: 52px; height: 52px; flex-basis: 52px; }
+      .card-fields { font-size: 17px; }
+      .card-fields .f .val { font-size: 14px; }
+      .card-photo { width: 90px; height: 108px; flex-basis: 90px; }
+      .card-body { padding: 10px 12px; }
+    }
+
+    @media print {
+      @page { size: A4 portrait; margin: 12mm; }
+      body { background: #fff; }
+      header, #boot, #bootError, #loginCard, #sessionBar, #pageMsg, #loading, #adminCard, #statusCard, .no-print { display: none !important; }
+      main { max-width: none; padding: 0; }
+      .card { box-shadow: none; padding: 0; margin: 0; }
+      .card-id { max-width: 180mm; aspect-ratio: 2 / 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .sched-wrap { max-width: 180mm; }
+    }
   </style>
 </head>
 <body>
-  <div id="loading" role="status" aria-live="polite">
-    <img src="https://drive.google.com/thumbnail?id=11TTDvVd_Co3ISHFmaCRpfhdyJniYSOFF&sz=w300" alt="Ezzy Madrasa logo">
-    <div class="spin" aria-hidden="true"></div>
-    <div>Loading Ezzy Madrasa portal…</div>
-    <a id="fallback" href="#">Not loading? Open the portal directly</a>
-  </div>
+  <header>
+    <h1 id="instName">Ezzy Madrasa</h1>
+    <p>Fee Status &amp; Hall Ticket Portal<span id="acadYearWrap" class="hidden"> &middot; Academic Year <span id="acadYear"></span></span></p>
+  </header>
 
-  <iframe id="app" title="Ezzy Madrasa Fee Status &amp; Hall Ticket Portal"
-          allow="clipboard-write"></iframe>
+  <main>
+    <!-- Start-up: loading settings from the server -->
+    <div id="boot" role="status" aria-live="polite">
+      <img id="bootLogo" alt="Ezzy Madrasa logo">
+      <div class="spin-lg" aria-hidden="true"></div>
+      <p>Loading portal…</p>
+    </div>
+    <section id="bootError" class="card hidden" role="alert">
+      <h3>Could not connect</h3>
+      <p id="bootErrorMsg"></p>
+      <button type="button" id="retryBtn">Try again</button>
+      <p class="muted"><a id="oldPortal" class="hidden" href="#" target="_blank" rel="noopener">Open the old portal</a></p>
+    </section>
+
+    <!-- Logged-in bar -->
+    <div id="sessionBar" class="hidden no-print">
+      <span id="whoAmI"></span>
+      <button type="button" class="secondary small" onclick="doLogout()">Log Out</button>
+    </div>
+    <div id="pageMsg" class="alert error hidden no-print" role="alert"></div>
+    <p id="loading" class="muted hidden no-print" role="status">Loading...</p>
+
+    <!-- Login -->
+    <section class="card hidden" id="loginCard">
+      <h3 style="margin-top:0">Login</h3>
+      <div class="toggle" role="group" aria-label="Login type">
+        <button type="button" id="modeParent" aria-pressed="true" onclick="setMode('parent')">Parent</button>
+        <button type="button" id="modeAdmin" aria-pressed="false" onclick="setMode('admin')">Admin</button>
+      </div>
+      <form id="loginForm" novalidate>
+        <div id="formError" class="alert error hidden" role="alert"></div>
+        <label for="username" id="userLabel">ITS Number</label>
+        <input id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false"
+               inputmode="numeric" placeholder="8-digit ITS number">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password">
+        <button type="submit" id="loginBtn">Log In</button>
+      </form>
+      <div id="parentHint">
+        <p class="muted">Password is the same as your child's ITS number.</p>
+        <p class="muted" style="margin-bottom:0">Hall ticket can be generated once at least
+          <b><span id="thrPct">70</span>%</b> of the annual fees are paid.</p>
+      </div>
+    </section>
+
+    <!-- Admin: student list -->
+    <section class="card hidden" id="adminCard">
+      <h3 style="margin-top:0">Students</h3>
+      <form id="searchForm" novalidate>
+        <label for="search">Search by name, ITS number or class</label>
+        <div class="search-row">
+          <input id="search" type="search" autocomplete="off" placeholder="e.g. Fatima, 30412345, 5">
+          <button type="submit" id="searchBtn">Search</button>
+        </div>
+      </form>
+      <div id="adminMsg" class="alert error hidden" role="alert"></div>
+      <p class="muted" id="adminCount" role="status" style="margin-top:0"></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th scope="col">Name</th><th scope="col">ITS No</th><th scope="col">Class</th>
+            <th scope="col" class="num">Total</th><th scope="col" class="num">Paid</th>
+            <th scope="col" class="num">Balance</th><th scope="col" class="num">Paid %</th>
+            <th scope="col">Hall Ticket</th><th scope="col"><span class="sr-only">Action</span></th>
+          </tr></thead>
+          <tbody id="studentRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Fee status (parent: own child; admin: selected student) -->
+    <section class="card hidden" id="statusCard">
+      <p class="student-line"><b id="sName"></b> <span class="muted" id="sMeta"></span></p>
+      <p class="muted" id="sPhone" style="margin-top:0"></p>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Annual Fees</div><div class="v" id="fTotal"></div></div>
+        <div class="stat"><div class="k">Paid</div><div class="v" id="fPaid" style="color:var(--green)"></div></div>
+        <div class="stat"><div class="k">Balance</div><div class="v" id="fBalance" style="color:var(--red)"></div></div>
+        <div class="stat"><div class="k">Paid %</div><div class="v" id="fPercent"></div></div>
+      </div>
+
+      <div class="bar"><div id="barFill" style="width:0%"></div><span class="mark" id="barMark"></span></div>
+      <div class="bar-label"><span>0%</span><span id="barThreshold"></span><span>100%</span></div>
+
+      <div id="statusMsg" class="alert" style="margin-top:14px" role="status"></div>
+
+      <!-- Admin only: per-student hall ticket access -->
+      <div id="accessRow" class="hidden no-print">
+        <fieldset class="access-set">
+          <legend>Hall ticket access</legend>
+          <div class="row" role="group" aria-describedby="accessInfo">
+            <button type="button" class="secondary small" data-access="Auto" aria-pressed="false">Auto (fee rule)</button>
+            <button type="button" class="secondary small" data-access="Allowed" aria-pressed="false">Allow</button>
+            <button type="button" class="secondary small" data-access="Blocked" aria-pressed="false">Block</button>
+          </div>
+          <p class="muted" id="accessInfo"></p>
+          <div id="accessMsg" class="alert hidden" role="status"></div>
+        </fieldset>
+      </div>
+
+      <div id="overrideRow" class="check hidden no-print">
+        <input type="checkbox" id="overrideChk">
+        <label for="overrideChk">Override fee eligibility (will be logged)</label>
+      </div>
+
+      <div id="examRow" class="no-print hidden">
+        <label for="examSel">Select exam</label>
+        <select id="examSel" aria-describedby="examHint"></select>
+        <p class="muted" id="examHint" style="margin:-8px 0 14px"></p>
+      </div>
+
+      <div class="row no-print">
+        <button type="button" id="genBtn" onclick="generateTicket()" class="hidden">Generate Hall Ticket</button>
+        <button type="button" class="secondary" onclick="toggleHistory()" aria-controls="history">Payment History</button>
+        <button type="button" id="backToList" class="secondary hidden" onclick="showAdmin()">Back to Students</button>
+      </div>
+
+      <div id="history" class="hidden table-wrap" style="margin-top:14px">
+        <table>
+          <thead><tr><th>Date</th><th>Receipt</th><th>Mode</th><th class="num">Amount</th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Admin only -->
+      <div id="adminTools" class="hidden no-print">
+        <h4>Record Payment</h4>
+        <div id="payMsg" class="alert hidden" role="status"></div>
+        <form id="payForm" novalidate>
+          <div class="grid2">
+            <div>
+              <label for="payDate">Date</label>
+              <input id="payDate" type="date">
+            </div>
+            <div>
+              <label for="payAmount">Amount</label>
+              <input id="payAmount" type="number" min="1" step="any" inputmode="decimal" autocomplete="off">
+            </div>
+            <div>
+              <label for="payReceipt">Receipt No (optional)</label>
+              <input id="payReceipt" maxlength="40" autocomplete="off">
+            </div>
+            <div>
+              <label for="payMode">Mode</label>
+              <select id="payMode">
+                <option>Cash</option>
+                <option>UPI</option>
+                <option>Bank</option>
+                <option>Cheque</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" id="payBtn">Record Payment</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Step 3: hall ticket -->
+    <section class="card hidden" id="ticketCard">
+      <div class="row no-print" style="margin-bottom:14px">
+        <button type="button" onclick="window.print()">Print / Save as PDF</button>
+        <button type="button" class="secondary" onclick="showStatusOnly()">Back</button>
+      </div>
+      <div id="reissueNote" class="alert warn no-print hidden"></div>
+      <div class="ticket" id="ticket"></div>
+    </section>
+  </main>
 
   <script>
-    // Your Apps Script web app link (Deploy > Manage deployments > Web app URL, ends in /exec).
-    var PORTAL_URL = 'https://script.google.com/macros/s/AKfycbzXEMKpLN4kBbeRY6HkBS9npa7UCQQbPAnZoEX7lAKfaB89-pGszBdJKBjN5Qtbzgg/exec';
+    // Paste your exact Web app URL here (Apps Script: Deploy > Manage deployments > Web app URL, ends in /exec).
+    // This value was copied from a screenshot and may be wrong.
+    var API_URL = 'https://script.google.com/macros/s/AKfycbzXEMKpLN4kBbeRY6HkBS9npa7UCQQbPAnZoEX7lAKfaB89-pGszBdJKBjN5Qtbzgg/exec';
+    var API_TIMEOUT_MS = 30000;   // Apps Script cold starts can take several seconds
+    var NET_ERROR = 'Could not reach the server. Check your internet connection and try again.';
 
-    var frame = document.getElementById('app');
-    var loading = document.getElementById('loading');
-    document.getElementById('fallback').href = PORTAL_URL;
+    // session = { token, role: 'parent' | 'admin', name } after login.
+    var session = null;
+    var mode = 'parent';          // login toggle
+    var currentStudentId = '';    // student shown on the status card (admin)
 
-    // Safari (all iPhone/iPad browsers, including WhatsApp's) and Android
-    // in-app WebViews block the cookies Google needs inside an embedded frame,
-    // which shows "401. That's an error." On those, open the portal directly.
-    var ua = navigator.userAgent;
-    var isIOS = /iPhone|iPad|iPod/.test(ua) ||
-      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-    var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/.test(ua);
-    var isWebView = /; wv\)|FBAN|FBAV|Instagram|WhatsApp/.test(ua);
-
-    // Embedding also fails (401) in Chrome/Edge when third-party cookies are
-    // blocked or several Google accounts are signed in, and a page can't detect
-    // that. So open the portal directly everywhere. Set EMBED = true to try the
-    // banner-free embedded view again.
-    var EMBED = false;
-
-    if (!EMBED || isIOS || isSafari || isWebView) {
-      location.replace(PORTAL_URL);
-    } else {
-      frame.addEventListener('load', function () { loading.classList.add('gone'); });
-      frame.src = PORTAL_URL;
+    function $(id) { return document.getElementById(id); }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
     }
+    function busy(btn, on, label) {
+      btn.disabled = on;
+      btn.innerHTML = on ? '<span class="spinner"></span>' + label : label;
+    }
+
+    function showAlert(el, text, kind) {
+      el.textContent = text;
+      el.className = 'alert ' + (kind || 'error') + (el.classList.contains('no-print') ? ' no-print' : '');
+      el.classList.toggle('hidden', !text);
+    }
+    function hideAll() {
+      ['bootError', 'loginCard', 'adminCard', 'statusCard', 'ticketCard', 'pageMsg', 'loading'].forEach(function (id) {
+        $(id).classList.add('hidden');
+      });
+    }
+    function setLoading(on) { $('loading').classList.toggle('hidden', !on); }
+
+    // ---- Session handling ----
+    function saveSession() {
+      try {
+        if (session) sessionStorage.setItem('htSession', JSON.stringify(session));
+        else sessionStorage.removeItem('htSession');
+      } catch (e) { /* storage may be blocked */ }
+    }
+    function loadSession() {
+      try {
+        var raw = sessionStorage.getItem('htSession');
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) { return null; }
+    }
+
+    /**
+     * Calls a server function with the session token as the first argument.
+     * onFail(message) runs on errors; an expired/invalid session logs out.
+     */
+    function run(fn, args, onOk, onFail) {
+      if (!session) { endSession('Please log in.'); return; }
+      api(fn, [session.token].concat(args || [])).then(function (res) {
+        if (res && res.authError) {
+          if (onFail) onFail(res.message);
+          endSession(res.message);
+          return;
+        }
+        onOk(res);
+      }, function (err) {
+        if (onFail) onFail(err.message);
+      });
+    }
+
+    /**
+     * POSTs {action, args} to the Apps Script web app and resolves with the
+     * parsed JSON reply. text/plain avoids a CORS preflight; no cookies are sent.
+     * Any network, HTTP or parse problem rejects with NET_ERROR.
+     */
+    function api(action, args) {
+      var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, API_TIMEOUT_MS) : null;
+      var opts = {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: action, args: args || [] }),
+        redirect: 'follow'
+      };
+      if (ctrl) opts.signal = ctrl.signal;
+      return fetch(API_URL, opts).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      }).then(function (text) {
+        var data = JSON.parse(text);
+        if (!data || typeof data !== 'object') throw new Error('Bad reply');
+        if (timer) clearTimeout(timer);
+        return data;
+      }).catch(function () {
+        if (timer) clearTimeout(timer);
+        throw new Error(NET_ERROR);
+      });
+    }
+
+    function setMode(m) {
+      mode = m;
+      $('modeParent').setAttribute('aria-pressed', String(m === 'parent'));
+      $('modeAdmin').setAttribute('aria-pressed', String(m === 'admin'));
+      var u = $('username');
+      if (m === 'parent') {
+        $('userLabel').textContent = 'ITS Number';
+        u.setAttribute('inputmode', 'numeric');
+        u.placeholder = '8-digit ITS number';
+      } else {
+        $('userLabel').textContent = 'Username';
+        u.removeAttribute('inputmode');
+        u.placeholder = '';
+      }
+      $('parentHint').classList.toggle('hidden', m !== 'parent');
+      showAlert($('formError'), '');
+    }
+
+    function doLogin() {
+      var user = $('username').value.trim();
+      var pass = $('password').value;
+      showAlert($('formError'), '');
+      if (!user || !pass) {
+        showAlert($('formError'), 'Please enter ' + (mode === 'parent' ? 'ITS number' : 'username') + ' and password.');
+        return;
+      }
+      busy($('loginBtn'), true, 'Logging in...');
+      api('login', [mode, user, pass]).then(function (res) {
+        busy($('loginBtn'), false, 'Log In');
+        if (!res.ok) {
+          showAlert($('formError'), res.message);
+          return;
+        }
+        session = { token: res.token, role: res.role, name: res.name };
+        saveSession();
+        $('password').value = '';
+        startSession();
+      }, function (err) {
+        busy($('loginBtn'), false, 'Log In');
+        showAlert($('formError'), err.message);
+      });
+    }
+
+    function startSession() {
+      $('whoAmI').textContent = session.role === 'admin'
+        ? 'Logged in as ' + session.name + ' (Admin)'
+        : 'Logged in as parent of ' + session.name;
+      $('sessionBar').classList.remove('hidden');
+      hideAll();
+      if (session.role === 'admin') showAdmin();
+      else loadMyStatus();
+    }
+
+    function doLogout() {
+      if (session) {
+        api('logout', [session.token]).catch(function () {});
+      }
+      endSession('');
+    }
+
+    function endSession(msg) {
+      session = null;
+      currentStudentId = '';
+      saveSession();
+      hideAll();
+      $('sessionBar').classList.add('hidden');
+      $('historyBody').innerHTML = '';
+      $('studentRows').innerHTML = '';
+      $('ticket').innerHTML = '';
+      $('history').classList.add('hidden');
+      $('loginCard').classList.remove('hidden');
+      showAlert($('formError'), msg || '');
+      $('username').focus();
+    }
+
+    // ---- Parent ----
+    function loadMyStatus() {
+      setLoading(true);
+      run('getMyStatus', [], function (res) {
+        setLoading(false);
+        if (!res.ok) { showAlert($('pageMsg'), res.message); return; }
+        renderStatus(res);
+      }, function (msg) {
+        setLoading(false);
+        showAlert($('pageMsg'), msg);
+      });
+    }
+
+    // ---- Admin ----
+    function showAdmin() {
+      hideAll();
+      $('adminCard').classList.remove('hidden');
+      searchStudents();
+    }
+
+    function searchStudents() {
+      var q = $('search').value.trim();
+      showAlert($('adminMsg'), '');
+      busy($('searchBtn'), true, 'Searching...');
+      run('adminListStudents', [q], function (res) {
+        busy($('searchBtn'), false, 'Search');
+        if (!res.ok) { showAlert($('adminMsg'), res.message); return; }
+        $('adminCount').textContent = res.students.length + ' student(s)' + (q ? ' matching "' + q + '"' : '') +
+          ' · Hall ticket needs ' + res.thresholdPercent + '% paid';
+        $('studentRows').innerHTML = res.students.length
+          ? res.students.map(function (s) {
+              var cls = esc(s.className) + (s.section ? '-' + esc(s.section) : '');
+              return '<tr><td>' + esc(s.name) + '</td><td>' + esc(s.itsNo) + '</td><td>' + cls + '</td>' +
+                '<td class="num">' + esc(s.totalFeesText) + '</td><td class="num">' + esc(s.paidText) + '</td>' +
+                '<td class="num">' + esc(s.balanceText) + '</td><td class="num">' + esc(s.percentPaid) + '%</td>' +
+                '<td class="' + (s.eligible ? 'yes' : 'no') + '">' + esc(s.accessLabel) + '</td>' +
+                '<td><button type="button" class="small" data-id="' + esc(s.studentId) + '" aria-label="View ' +
+                esc(s.name) + '">View</button></td></tr>';
+            }).join('')
+          : '<tr><td colspan="9" class="muted">No students found.</td></tr>';
+      }, function (msg) {
+        busy($('searchBtn'), false, 'Search');
+        showAlert($('adminMsg'), msg);
+      });
+    }
+
+    function viewStudent(id) {
+      showAlert($('adminMsg'), '');
+      setLoading(true);
+      run('adminGetStudent', [id], function (res) {
+        setLoading(false);
+        if (!res.ok) { showAlert($('adminMsg'), res.message); return; }
+        renderStatus(res);
+      }, function (msg) {
+        setLoading(false);
+        showAlert($('adminMsg'), msg);
+      });
+    }
+
+    function recordPayment() {
+      var amount = Number($('payAmount').value);
+      if (!(amount > 0)) {
+        showAlert($('payMsg'), 'Enter an amount greater than 0.');
+        $('payAmount').focus();
+        return;
+      }
+      showAlert($('payMsg'), '');
+      busy($('payBtn'), true, 'Saving...');
+      run('adminRecordPayment', [{
+        studentId: currentStudentId,
+        date: $('payDate').value,
+        amount: amount,
+        receiptNo: $('payReceipt').value.trim(),
+        mode: $('payMode').value
+      }], function (res) {
+        busy($('payBtn'), false, 'Record Payment');
+        if (!res.ok) { showAlert($('payMsg'), res.message); return; }
+        renderStatus(res);
+        showAlert($('payMsg'), res.notice, 'ok');
+      }, function (msg) {
+        busy($('payBtn'), false, 'Record Payment');
+        showAlert($('payMsg'), msg);
+      });
+    }
+
+    // Admin: Auto / Allow / Block buttons on the student detail view.
+    function accessButtons() { return $('accessRow').querySelectorAll('button[data-access]'); }
+
+    function renderAccess(a) {
+      $('accessRow').classList.toggle('hidden', !a);
+      showAlert($('accessMsg'), '');
+      if (!a) { $('accessInfo').textContent = ''; return; }
+      Array.prototype.forEach.call(accessButtons(), function (b) {
+        b.disabled = false;
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-access') === a.mode));
+      });
+      $('accessInfo').textContent = 'Current: ' + a.label +
+        (a.setBy ? ' (set by ' + a.setBy + (a.setOn ? ' on ' + a.setOn : '') + ')' : '');
+    }
+
+    function setAccess(mode) {
+      var btns = accessButtons();
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+      showAlert($('accessMsg'), 'Saving...', 'warn');
+      var reenable = function (text) {
+        Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+        showAlert($('accessMsg'), text);
+      };
+      run('adminSetEligibility', [currentStudentId, mode], function (res) {
+        if (!res.ok) { reenable(res.message); return; }
+        renderStatus(res);
+        showAlert($('accessMsg'), res.notice, 'ok');
+      }, reenable);
+    }
+
+    function todayIso() {
+      var d = new Date();
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+
+    // ---- Shared status / ticket views ----
+    function renderStatus(res) {
+      var s = res.student, f = res.fee;
+      var isAdmin = session && session.role === 'admin';
+      currentStudentId = s.studentId;
+      $('sName').textContent = s.name;
+      $('sMeta').textContent = '(' + s.studentId + ')' + (s.itsNo ? ' · ITS ' + s.itsNo : '') + ' · Class ' + s.className +
+        (s.section ? '-' + s.section : '') + (s.rollNo ? ' · Roll No ' + s.rollNo : '');
+      $('sPhone').textContent = 'Parent: ' + (s.fatherName || '') + (s.phoneMasked ? ' · ' + s.phoneMasked : '');
+
+      $('fTotal').textContent = f.totalFeesText;
+      $('fPaid').textContent = f.paidText;
+      $('fBalance').textContent = f.balanceText;
+      $('fPercent').textContent = f.percentPaid + '%';
+      $('fPercent').style.color = res.feesOk ? 'var(--green)' : 'var(--red)';
+
+      $('barFill').style.width = Math.min(100, f.percentPaid) + '%';
+      $('barFill').style.background = res.feesOk ? 'var(--green)' : 'var(--amber)';
+      $('barMark').style.left = res.thresholdPercent + '%';
+      $('barThreshold').textContent = 'Required ' + res.thresholdPercent + '%';
+
+      var msg = $('statusMsg');
+      msg.textContent = res.message;
+      msg.className = 'alert ' + (res.eligible ? 'ok' : 'warn');
+      // Parents only see the button when eligible; admins always (with override if needed).
+      var canGen = res.eligible || isAdmin;
+      $('genBtn').classList.toggle('hidden', !canGen);
+      renderExams(res.exams || [], canGen);
+      $('overrideChk').checked = false;
+      $('overrideRow').classList.toggle('hidden', !isAdmin || res.eligible);
+      $('backToList').classList.toggle('hidden', !isAdmin);
+      $('adminTools').classList.toggle('hidden', !isAdmin);
+      renderAccess(isAdmin ? res.access : null);
+      if (isAdmin) {
+        $('payDate').value = todayIso();
+        $('payAmount').value = '';
+        $('payReceipt').value = '';
+        $('payMode').selectedIndex = 0;
+        showAlert($('payMsg'), '');
+      }
+
+      $('historyBody').innerHTML = f.history.length
+        ? f.history.map(function (h) {
+            return '<tr><td>' + esc(h.date) + '</td><td>' + esc(h.receiptNo) + '</td><td>' +
+              esc(h.mode) + '</td><td class="num">' + esc(h.amountText) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="4" class="muted">No payments recorded for this year.</td></tr>';
+
+      hideAll();
+      $('statusCard').classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    // Exam selector: unavailable exams are listed but disabled.
+    function renderExams(exams, show) {
+      var sel = $('examSel');
+      var prev = sel.value;
+      var pick = '';
+      sel.innerHTML = '';
+      exams.forEach(function (e) {
+        var o = document.createElement('option');
+        o.value = e.name;
+        o.textContent = e.name + (e.available ? '' : ' (not available yet)');
+        o.disabled = !e.available;
+        sel.appendChild(o);
+        if (e.available && (!pick || e.name === prev)) pick = e.name;
+      });
+      sel.value = pick;
+      $('examRow').classList.toggle('hidden', !show);
+      $('genBtn').disabled = !pick;
+      $('examHint').textContent = pick ? '' : 'No exam hall tickets are available yet.';
+    }
+
+    function generateTicket() {
+      var exam = $('examSel').value;
+      if (!exam) {
+        var m = $('statusMsg');
+        m.textContent = 'Please select an exam.';
+        m.className = 'alert error';
+        $('examSel').focus();
+        return;
+      }
+      busy($('genBtn'), true, 'Generating...');
+      var onOk = function (res) {
+        busy($('genBtn'), false, 'Generate Hall Ticket');
+        if (!res.ok) {
+          var msg = $('statusMsg');
+          msg.textContent = res.message;
+          msg.className = 'alert error';
+          return;
+        }
+        renderTicket(res);
+      };
+      var onFail = function (text) {
+        busy($('genBtn'), false, 'Generate Hall Ticket');
+        var msg = $('statusMsg');
+        msg.textContent = text;
+        msg.className = 'alert error';
+      };
+      if (session && session.role === 'admin') {
+        run('adminGenerateHallTicket', [currentStudentId, $('overrideChk').checked, exam], onOk, onFail);
+      } else {
+        run('generateMyHallTicket', [exam], onOk, onFail);
+      }
+    }
+
+    // Ezzy Madrasa logo (Ezzy madrasa logo.png, resized to 290x320), printed top-right on the hall ticket.
+    // Set Settings > Logo URL in the sheet to use a different image.
+    var DEFAULT_LOGO = 'data:image/png;base64,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';
+
+    function renderTicket(res) {
+      var s = res.student, t = res.ticket, st = res.settings;
+
+      var logo = '<img src="' + (st.logoUrl ? esc(st.logoUrl) : DEFAULT_LOGO) + '" alt="Logo">';
+      var photo = s.photoUrl
+        ? '<img src="' + esc(s.photoUrl) + '" alt="Student photo">'
+        : '<span class="ph">Affix<br>passport size<br>photo</span>';
+      var cls = esc(s.className) + (s.section ? ' - ' + esc(s.section) : '');
+
+      // --- Card (matches the reference layout) ---
+      var card =
+        '<div class="card-id">' +
+          '<div class="card-head">' +
+            '<div class="card-title">' +
+              '<div class="inst">' + esc(st.institutionName) + '</div>' +
+              (st.institutionAddress ? '<div class="addr">' + esc(st.institutionAddress) + '</div>' : '') +
+            '</div>' +
+            '<div class="card-logo">' + logo + '</div>' +
+          '</div>' +
+          '<div class="card-body">' +
+            '<div class="card-fields">' +
+              '<div class="f"><span class="lbl">Name:</span><span class="val">' + esc(s.name) + '</span></div>' +
+              '<div class="f"><span class="lbl">Class:</span><span class="val">' + cls + '</span></div>' +
+              '<div class="f"><span class="lbl">Roll No.</span><span class="val">' + esc(s.rollNo) + '</span></div>' +
+              '<div class="f"><span class="lbl">Exam</span><span class="val">' + esc(st.examName) + '</span></div>' +
+              '<div class="bottom">' +
+                '<div class="f"><span class="lbl">Autho. Sign.</span></div>' +
+                '<div class="f"><span class="lbl">ITS No.</span><span class="val">' + esc(s.itsNo) + '</span></div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-photo">' + photo + '</div>' +
+          '</div>' +
+          '<div class="card-foot">' +
+            '<span>Hall Ticket No. ' + esc(t.ticketNo) + '</span>' +
+            '<span>Issued ' + esc(t.issuedOn) + ' &middot; Fees ' + esc(res.fee.percentPaid) + '% paid</span>' +
+          '</div>' +
+        '</div>';
+
+      // --- Optional timetable below the card ---
+      var sched = '';
+      if (res.schedule && res.schedule.length) {
+        var rows = res.schedule.map(function (e, i) {
+          return '<tr><td>' + (i + 1) + '</td><td>' + esc(e.date) + (e.day ? '<br><small>' + esc(e.day) + '</small>' : '') +
+            '</td><td>' + esc(e.subject) + '</td><td>' + esc(e.time) + '</td><td>' + esc(e.hall) + '</td></tr>';
+        }).join('');
+        sched =
+          '<div class="sched-wrap">' +
+            '<h4>' + esc(st.examName) + ' &mdash; Timetable (Class ' + cls + ')</h4>' +
+            '<table class="sched"><thead><tr><th>#</th><th>Date</th><th>Subject</th><th>Time</th><th>Hall</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table>' +
+            (st.instructions ? '<div class="instr"><b>Instructions</b>' + esc(st.instructions) + '</div>' : '') +
+          '</div>';
+      } else if (st.instructions) {
+        sched = '<div class="sched-wrap"><div class="instr"><b>Instructions</b>' + esc(st.instructions) + '</div></div>';
+      }
+
+      $('ticket').innerHTML = card + sched;
+
+      var note = $('reissueNote');
+      note.classList.toggle('hidden', !t.reissued);
+      note.textContent = 'This hall ticket was already issued on ' + t.issuedOn + '. Showing the same ticket number again.';
+
+      $('statusCard').classList.add('hidden');
+      $('ticketCard').classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    function showStatusOnly() {
+      $('ticketCard').classList.add('hidden');
+      $('statusCard').classList.remove('hidden');
+    }
+    function toggleHistory() { $('history').classList.toggle('hidden'); }
+
+    // ---- Wiring ----
+    $('loginForm').addEventListener('submit', function (e) { e.preventDefault(); doLogin(); });
+    $('searchForm').addEventListener('submit', function (e) { e.preventDefault(); searchStudents(); });
+    $('payForm').addEventListener('submit', function (e) { e.preventDefault(); recordPayment(); });
+    $('studentRows').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (btn) viewStudent(btn.getAttribute('data-id'));
+    });
+    $('accessRow').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-access]');
+      if (btn && !btn.disabled) setAccess(btn.getAttribute('data-access'));
+    });
+
+    $('retryBtn').addEventListener('click', boot);
+
+    // Header / login text from the Settings sheet (text only, never HTML).
+    function applySettings(s) {
+      s = s || {};
+      if (s.institutionName) {
+        $('instName').textContent = s.institutionName;
+        document.title = s.institutionName + ' - Fee Status & Hall Ticket';
+      }
+      if (s.academicYear) {
+        $('acadYear').textContent = s.academicYear;
+        $('acadYearWrap').classList.remove('hidden');
+      }
+      if (s.thresholdPercent != null) $('thrPct').textContent = s.thresholdPercent;
+    }
+
+    // Load settings, then resume a session after a page refresh (same tab only) or show login.
+    function boot() {
+      $('bootError').classList.add('hidden');
+      $('boot').classList.remove('hidden');
+      api('getPublicSettings', []).then(function (res) {
+        if (!res.ok) { bootFailed(res.message || NET_ERROR); return; }
+        applySettings(res.settings);
+        $('boot').classList.add('hidden');
+        var saved = loadSession();
+        if (saved && saved.token && (saved.role === 'parent' || saved.role === 'admin')) {
+          session = saved;
+          startSession();
+        } else {
+          setMode('parent');
+          $('loginCard').classList.remove('hidden');
+        }
+      }, function (err) {
+        bootFailed(err.message);
+      });
+    }
+
+    function bootFailed(msg) {
+      $('boot').classList.add('hidden');
+      $('bootErrorMsg').textContent = msg;
+      $('oldPortal').href = API_URL;
+      $('oldPortal').classList.remove('hidden');
+      $('bootError').classList.remove('hidden');
+      $('retryBtn').focus();
+    }
+
+    $('bootLogo').src = DEFAULT_LOGO;
+    boot();
   </script>
 </body>
 </html>
