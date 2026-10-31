@@ -118,6 +118,12 @@
     #bootError h3 { margin-top: 0; color: var(--red); }
     #bootError a { color: var(--green); }
 
+    .s-head { display: flex; gap: 12px; align-items: flex-start; }
+    .s-text { flex: 1; min-width: 0; }
+    .s-photo { flex: 0 0 64px; width: 64px; height: 76px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .s-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .s-initials { font: 600 20px "Segoe UI", Arial, sans-serif; color: var(--muted); }
+
     /* ---- Hall ticket card (landscape, ID-card style) ---- */
     .ticket { font-family: "Bodoni Moda", "Bodoni MT", "Didot", Georgia, "Times New Roman", serif; color: #000; }
     .card-id { border: 1.5px solid #555; border-radius: 6px; background: #fff; width: 100%; max-width: 680px; margin: 0 auto; aspect-ratio: 2 / 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -317,8 +323,13 @@
 
     <!-- Fee status (parent: own child; admin: selected student) -->
     <section class="card hidden" id="statusCard">
-      <p class="student-line"><b id="sName"></b> <span class="muted" id="sMeta"></span></p>
-      <p class="muted" id="sPhone" style="margin-top:0"></p>
+      <div class="s-head">
+        <div class="s-photo" id="sPhoto"></div>
+        <div class="s-text">
+          <p class="student-line"><b id="sName"></b> <span class="muted" id="sMeta"></span></p>
+          <p class="muted" id="sPhone" style="margin-top:0"></p>
+        </div>
+      </div>
 
       <div class="stats">
         <div class="stat"><div class="k">Annual Fees</div><div class="v" id="fTotal"></div></div>
@@ -619,6 +630,8 @@
     function endSession(msg) {
       session = null;
       currentStudentId = '';
+      photoCache = Object.create(null);
+      photoWaiters = Object.create(null);
       saveSession();
       hideAll();
       $('sessionBar').classList.add('hidden');
@@ -831,6 +844,7 @@
       var isAdmin = session && session.role === 'admin';
       currentStudentId = s.studentId;
       $('sName').textContent = s.name;
+      showStudentPhoto($('sPhoto'), s, 'thumb');
       $('sMeta').textContent = '(' + s.studentId + ')' + (s.itsNo ? ' · ITS ' + s.itsNo : '') + ' · Class ' + s.className +
         (s.section ? '-' + s.section : '') + (s.rollNo ? ' · Roll No ' + s.rollNo : '');
       $('sPhone').textContent = 'Parent: ' + (s.fatherName || '') + (s.phoneMasked ? ' · ' + s.phoneMasked : '');
@@ -942,9 +956,6 @@
 
       // The embedded logo always loads; Drive links are often blocked on phones (Safari, WhatsApp browser).
       var logo = '<img src="' + (DEFAULT_LOGO || esc(st.logoUrl)) + '" alt="Logo" onerror="this.style.visibility=\'hidden\'">';
-      var photo = s.photoUrl
-        ? '<img src="' + esc(s.photoUrl) + '" alt="Student photo">'
-        : '<span class="ph">Affix<br>passport size<br>photo</span>';
       var cls = esc(s.className) + (s.section ? ' - ' + esc(s.section) : '');
 
       // --- Card (matches the reference layout) ---
@@ -968,7 +979,7 @@
                 '<div class="f"><span class="lbl">ITS No.</span><span class="val">' + esc(s.itsNo) + '</span></div>' +
               '</div>' +
             '</div>' +
-            '<div class="card-photo">' + photo + '</div>' +
+            '<div class="card-photo" id="ticketPhoto"></div>' +
           '</div>' +
           '<div class="card-foot">' +
             '<span>Hall Ticket No. ' + esc(t.ticketNo) + '</span>' +
@@ -995,6 +1006,7 @@
       }
 
       $('ticket').innerHTML = card + sched;
+      showStudentPhoto($('ticketPhoto'), s, 'ticket');
 
       var note = $('reissueNote');
       note.classList.toggle('hidden', !t.reissued);
@@ -1010,6 +1022,84 @@
       $('statusCard').classList.remove('hidden');
     }
     function toggleHistory() { $('history').classList.toggle('hidden'); }
+
+    // ---- Student photos ----
+    // Photos load after the card is shown and never block it. The sheet "Photo URL" is tried
+    // first; otherwise (or if it fails to load) getStudentPhoto is called once per student per session.
+    var photoCache = Object.create(null);    // studentId -> data URI or null
+    var photoWaiters = Object.create(null);  // studentId -> callbacks waiting for an in-flight call
+
+    function photoInitials(name) {
+      var w = String(name || '').trim().split(/\s+/).filter(String);
+      if (!w.length) return '?';
+      return (w[0].charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : '')).toUpperCase().slice(0, 2);
+    }
+
+    function paintPhotoPlaceholder(box, kind, name) {
+      if (kind === 'ticket') {
+        box.innerHTML = '<span class="ph">Affix<br>passport size<br>photo</span>';
+        return;
+      }
+      var sp = document.createElement('span');
+      sp.className = 's-initials';
+      sp.setAttribute('aria-hidden', 'true');
+      sp.textContent = photoInitials(name);
+      box.innerHTML = '';
+      box.appendChild(sp);
+    }
+
+    // Shows the image once it has loaded; on error restores the placeholder and calls onError.
+    function paintPhoto(box, src, kind, name, onError, current) {
+      var img = document.createElement('img');
+      img.alt = 'Photo of ' + (name || 'student');
+      img.onload = function () {
+        if (!current()) return;
+        box.innerHTML = '';
+        box.appendChild(img);
+      };
+      img.onerror = function () {
+        if (!current()) return;
+        paintPhotoPlaceholder(box, kind, name);
+        if (onError) onError();
+      };
+      img.src = src;
+    }
+
+    function loadStudentPhoto(studentId, cb) {
+      if (studentId in photoCache) return cb(photoCache[studentId]);
+      if (!session) return cb(null);
+      if (photoWaiters[studentId]) { photoWaiters[studentId].push(cb); return; }
+      var waiters = photoWaiters[studentId] = [cb];
+      var cache = photoCache;
+      var finish = function (photo, keep) {
+        if (cache === photoCache) {
+          if (keep) photoCache[studentId] = photo;
+          delete photoWaiters[studentId];
+        }
+        waiters.forEach(function (fn) { fn(photo); });
+      };
+      run('getStudentPhoto', [studentId], function (res) {
+        finish(res && res.ok && res.photo ? res.photo : null, true);
+      }, function () {
+        finish(null, false); // network error: not cached, the next view retries
+      });
+    }
+
+    function showStudentPhoto(box, s, kind) {
+      if (!box || !s) return;
+      var sid = String(s.studentId || '');
+      box.setAttribute('data-sid', sid);
+      paintPhotoPlaceholder(box, kind, s.name);
+      var current = function () { return box.isConnected && box.getAttribute('data-sid') === sid; };
+      var fromApi = function () {
+        if (!sid) return;
+        loadStudentPhoto(sid, function (src) {
+          if (src && current()) paintPhoto(box, src, kind, s.name, null, current);
+        });
+      };
+      if (s.photoUrl) paintPhoto(box, s.photoUrl, kind, s.name, fromApi, current);
+      else fromApi();
+    }
 
     // ---- Parent: Pay Fees ----
     var payCtx = null;    // { name, its, cls, balance, balanceText, year } of the logged-in parent's child
