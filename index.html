@@ -51,6 +51,8 @@
     .yes { color: var(--green); font-weight: 600; }
     .no { color: var(--red); font-weight: 600; }
     #adminTools { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 4px; }
+    #syncResult h4 { margin: 16px 0 6px; font-size: 15px; }
+    #syncResult ul { margin: 0; padding-left: 20px; font-size: 14px; overflow-wrap: anywhere; }
     .row { display: flex; gap: 10px; flex-wrap: wrap; }
     .row > button { flex: 1; min-width: 150px; }
     .access-set { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 4px; margin: 0 0 14px; }
@@ -216,7 +218,7 @@
     @media print {
       @page { size: A4 portrait; margin: 12mm; }
       body { background: #fff; }
-      header, #boot, #bootError, #loginCard, #sessionBar, #pageMsg, #loading, #adminCard, #statusCard, .no-print { display: none !important; }
+      header, #boot, #bootError, #loginCard, #sessionBar, #pageMsg, #loading, #adminCard, #syncCard, #statusCard, .no-print { display: none !important; }
       main { max-width: none; padding: 0; }
       .card { box-shadow: none; padding: 0; margin: 0; }
       .card-id { max-width: 180mm; aspect-ratio: 2 / 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -299,6 +301,18 @@
           <tbody id="studentRows"></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- Admin: sync Fees Split from the uploaded due list -->
+    <section class="card hidden" id="syncCard">
+      <h3 style="margin-top:0">Sync due list</h3>
+      <p class="muted">Reads the uploaded due list and updates only the changed files in Fees Split.</p>
+      <div class="row">
+        <button type="button" id="syncPreviewBtn">Preview changes</button>
+        <button type="button" class="secondary" id="syncApplyBtn">Apply update</button>
+      </div>
+      <div id="syncMsg" class="alert hidden" role="status" style="margin-top:14px"></div>
+      <div id="syncResult"></div>
     </section>
 
     <!-- Fee status (parent: own child; admin: selected student) -->
@@ -475,7 +489,7 @@
       el.classList.toggle('hidden', !text);
     }
     function hideAll() {
-      ['bootError', 'loginCard', 'adminCard', 'statusCard', 'ticketCard', 'pageMsg', 'loading'].forEach(function (id) {
+      ['bootError', 'loginCard', 'adminCard', 'syncCard', 'statusCard', 'ticketCard', 'pageMsg', 'loading'].forEach(function (id) {
         $(id).classList.add('hidden');
       });
     }
@@ -610,6 +624,8 @@
       $('sessionBar').classList.add('hidden');
       $('historyBody').innerHTML = '';
       $('studentRows').innerHTML = '';
+      $('syncResult').innerHTML = '';
+      showAlert($('syncMsg'), '');
       $('ticket').innerHTML = '';
       $('history').classList.add('hidden');
       setupPay(null);
@@ -635,7 +651,75 @@
     function showAdmin() {
       hideAll();
       $('adminCard').classList.remove('hidden');
+      $('syncCard').classList.remove('hidden');
       searchStudents();
+    }
+
+    // ---- Admin: due list sync ----
+    function syncMoney(n) {
+      return n == null || n === '' ? '' : 'Rs. ' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    }
+
+    function syncDueList(dryRun) {
+      if (!dryRun && !confirm('Update the Fees Split sheet from the due list? Only files whose amounts changed are updated.')) return;
+      var btn = dryRun ? $('syncPreviewBtn') : $('syncApplyBtn');
+      var other = dryRun ? $('syncApplyBtn') : $('syncPreviewBtn');
+      var label = dryRun ? 'Preview changes' : 'Apply update';
+      function done() { busy(btn, false, label); other.disabled = false; }
+      showAlert($('syncMsg'), '');
+      busy(btn, true, dryRun ? 'Checking...' : 'Updating...');
+      other.disabled = true;
+      run('adminSyncDueList', [dryRun === true], function (res) {
+        done();
+        if (!res.ok) { showAlert($('syncMsg'), res.message); return; }
+        renderSync(res);
+        showAlert($('syncMsg'), res.dryRun
+          ? res.filesChanged + ' file(s) would change. Nothing has been written yet.'
+          : 'Updated ' + res.rowsUpdated + ' student row(s) in ' + res.filesChanged + ' file(s).', 'ok');
+      }, function (msg) {
+        done();
+        showAlert($('syncMsg'), msg);
+      });
+    }
+
+    function renderSync(res) {
+      var changes = res.changes || [];
+      var unmatched = res.unmatched || [];
+      var warnings = res.warnings || [];
+      var html = '<p class="muted">' + esc(res.filesChecked) + ' file(s) checked · ' + esc(res.filesChanged) +
+        ' changed · ' + esc(res.rowsUpdated) + ' student row(s) ' + (res.dryRun ? 'to update' : 'updated') +
+        (res.fileNoFilled > 0 ? ' · File No ' + (res.dryRun ? 'to fill' : 'filled') + ' for ' + esc(res.fileNoFilled) + ' row(s)' : '') +
+        '</p>';
+      if (changes.length) {
+        html += '<div class="table-wrap"><table class="students"><thead><tr>' +
+          '<th scope="col">Students</th><th scope="col">File No</th>' +
+          '<th scope="col" class="num">Old paid</th><th scope="col" class="num">New paid</th>' +
+          '<th scope="col" class="num">Old commitment</th><th scope="col" class="num">New commitment</th>' +
+          '</tr></thead><tbody>' +
+          changes.map(function (c) {
+            return '<tr><td>' + esc((c.names || []).join(', ')) + '</td>' +
+              '<td data-label="File No">' + esc(c.fileNo) + '</td>' +
+              '<td class="num" data-label="Old paid">' + esc(syncMoney(c.oldPaid)) + '</td>' +
+              '<td class="num" data-label="New paid">' + esc(syncMoney(c.newPaid)) + '</td>' +
+              '<td class="num" data-label="Old commitment">' + esc(syncMoney(c.oldCommitment)) + '</td>' +
+              '<td class="num" data-label="New commitment">' + esc(syncMoney(c.newCommitment)) + '</td></tr>';
+          }).join('') +
+          '</tbody></table></div>';
+      } else {
+        html += '<p>No changes - Fees Split already matches the due list.</p>';
+      }
+      if (unmatched.length) {
+        html += '<h4>Not matched</h4><ul>' + unmatched.map(function (u) {
+          var what = u.type === 'file'
+            ? 'File ' + u.fileNo + ((u.names || []).length ? ' (' + u.names.join(', ') + ')' : '')
+            : 'Fees Split row ' + u.row + ': ' + u.name;
+          return '<li>' + esc(what) + ' - ' + esc(u.reason) + '</li>';
+        }).join('') + '</ul>';
+      }
+      if (warnings.length) {
+        html += '<h4>Warnings</h4><ul>' + warnings.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>';
+      }
+      $('syncResult').innerHTML = html;
     }
 
     function searchStudents() {
@@ -1104,6 +1188,8 @@
     // ---- Wiring ----
     $('loginForm').addEventListener('submit', function (e) { e.preventDefault(); doLogin(); });
     $('searchForm').addEventListener('submit', function (e) { e.preventDefault(); searchStudents(); });
+    $('syncPreviewBtn').addEventListener('click', function () { syncDueList(true); });
+    $('syncApplyBtn').addEventListener('click', function () { syncDueList(false); });
     $('payForm').addEventListener('submit', function (e) { e.preventDefault(); recordPayment(); });
     $('studentRows').addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-id]');
